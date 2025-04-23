@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>超慢跑節拍器</title>
+    <style>
+        :root {
+            --primary-color: #4361ee;
+            --primary-light: #e9efff;
+            --secondary-color: #ef476f;
+            --accent-color: #06d6a0;
+            --bg-color: #f8f9fa;
+            --card-color: #ffffff;
+            --text-primary: #2b2d42;
+            --text-secondary: #50577a;
+            --text-tertiary: #8d99ae;
+            --shadow: 0 10px 20px rgba(0, 0, 0, 0.08);
+            --transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+        
+        /* 倒數計時動畫 */
+        @keyframes countdownPulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.9; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        
+        .countdown-active {
+            animation: countdownPulse 1s infinite;
+            color: var(--secondary-color) !important;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--bg-color);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            transition: var(--transition);
+        }
+        
+        .container {
+            width: 100%;
+            max-width: 500px;
+            background: var(--card-color);
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: var(--shadow);
+            position: relative;
+        }
+        
+        header {
+            background: var(--primary-color);
+            color: white;
+            padding: 24px 20px;
+            text-align: center;
+            position: relative;
+        }
+        
+        h1 {
+            font-weight: 700;
+            font-size: 24px;
+            margin: 0;
+            letter-spacing: 0.5px;
+        }
+        
+        .content {
+            padding: 24px;
+        }
+        
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        /* 步頻選擇器樣式 */
+        .bpm-options {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 32px;
+        }
+        
+        .bpm-option {
+            flex: 1;
+            padding: 16px 12px;
+            border-radius: 12px;
+            background: var(--bg-color);
+            text-align: center;
+            cursor: pointer;
+            transition: var(--transition);
+            border: 2px solid transparent;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .bpm-option:before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary-color), var(--accent-color));
+            opacity: 0;
+            transition: var(--transition);
+        }
+        
+        .bpm-option:hover {
+            transform: translateY(-2px);
+        }
+        
+        .bpm-option.selected {
+            border-color: var(--primary-color);
+            background: var(--primary-light);
+        }
+        
+        .bpm-option.selected:before {
+            opacity: 1;
+        }
+        
+        .bpm-option h3 {
+            font-size: 20px;
+            margin: 0 0 8px;
+            color: var(--text-primary);
+        }
+        
+        .bpm-option p {
+            font-size: 13px;
+            color: var(--text-tertiary);
+            margin: 0;
+        }
+        
+        /* 時間選擇器樣式 */
+        .time-buttons {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 32px;
+        }
+        
+        .time-btn {
+            padding: 16px 8px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            background: var(--bg-color);
+            color: var(--text-primary);
+            border: none;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        
+        .time-btn:hover {
+            transform: translateY(-2px);
+            background: #f0f0f0;
+        }
+        
+        .time-btn.selected {
+            background: var(--primary-light);
+            color: var(--primary-color);
+            box-shadow: 0 4px 8px rgba(67, 97, 238, 0.15);
+        }
+        
+        /* 主按鈕樣式 */
+        .action-btn {
+            display: flex;
+            justify-content: center;
+            margin-top: 8px;
+        }
+        
+        .primary-btn {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 30px;
+            padding: 16px 32px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            box-shadow: 0 4px 12px rgba(67, 97, 238, 0.2);
+            min-width: 200px;
+            text-align: center;
+        }
+        
+        .primary-btn:hover {
+            background: #3852d4;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(67, 97, 238, 0.25);
+        }
+        
+        .primary-btn.paused {
+            background: var(--secondary-color);
+            box-shadow: 0 4px 12px rgba(239, 71, 111, 0.2);
+        }
+        
+        .primary-btn.paused:hover {
+            background: #e63c67;
+            box-shadow: 0 6px 16px rgba(239, 71, 111, 0.25);
+        }
+        
+        .secondary-btn {
+            background: #e9ecef;
+            color: var(--text-secondary);
+            border: none;
+            border-radius: 30px;
+            padding: 16px 32px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            min-width: 120px;
+        }
+        
+        .secondary-btn:hover {
+            background: #dee2e6;
+            transform: translateY(-2px);
+        }
+        
+        .secondary-btn:disabled {
+            background: #f1f3f5;
+            color: #adb5bd;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        /* 跑步畫面樣式 */
+        .display {
+            background: var(--primary-light);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .display:before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 6px;
+            background: linear-gradient(90deg, var(--primary-color), var(--accent-color));
+        }
+        
+        .time-display {
+            font-size: 56px;
+            font-weight: 700;
+            text-align: center;
+            margin: 8px 0 20px;
+            color: var(--primary-color);
+            letter-spacing: 2px;
+        }
+        
+        .progress-bar {
+            height: 6px;
+            background: #d0d9ff;
+            border-radius: 3px;
+            margin-bottom: 24px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary-color), var(--accent-color));
+            width: 100%;
+            transition: width 1s linear;
+        }
+        
+        .stats {
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .stat-box {
+            text-align: center;
+            flex: 1;
+            padding: 8px;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-tertiary);
+        }
+        
+        .buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+        
+        .buttons button {
+            flex: 1;
+        }
+        
+        .hint {
+            padding: 16px;
+            margin-top: 16px;
+            border-radius: 12px;
+            background: #f8f9fa;
+            border-left: 4px solid var(--accent-color);
+        }
+        
+        .hint p {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin: 0;
+            line-height: 1.5;
+        }
+        
+        /* 畫面切換 */
+        .screen {
+            display: none;
+        }
+        
+        .screen.active {
+            display: block;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        /* 返回按鈕 */
+        .back-btn {
+            position: absolute;
+            top: 24px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            width: 36px;
+            height: 36px;
+            border-radius: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        
+        .back-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        /* 脈衝動畫效果 */
+        .pulse {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            box-shadow: 0 0 0 rgba(6, 214, 160, 0.4);
+            animation: pulse 2s infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+            display: none;
+        }
+        
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(6, 214, 160, 0.4);
+            }
+            70% {
+                box-shadow: 0 0 0 15px rgba(6, 214, 160, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(6, 214, 160, 0);
+            }
+        }
+        
+        .running .pulse {
+            display: inline-block;
+        }
+        
+        /* 響應式調整 */
+        @media (max-width: 480px) {
+            .container {
+                border-radius: 16px;
+            }
+            
+            header {
+                padding: 20px 16px;
+            }
+            
+            .content {
+                padding: 20px 16px;
+            }
+            
+            .time-display {
+                font-size: 48px;
+            }
+            
+            .stat-value {
+                font-size: 20px;
+            }
+            
+            .primary-btn, .secondary-btn {
+                padding: 14px 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 第一個畫面：選擇設定 -->
+        <div id="settingsScreen" class="screen active">
+            <header>
+                <h1>超慢跑節拍器</h1>
+            </header>
+            
+            <div class="content">
+                <div class="section-title">選擇步頻</div>
+                <div class="bpm-options">
+                    <div class="bpm-option selected" data-bpm="180">
+                        <h3>180 BPM</h3>
+                        <p>標準高效率步頻</p>
+                    </div>
+                    <div class="bpm-option" data-bpm="200">
+                        <h3>200 BPM</h3>
+                        <p>更高效率步頻</p>
+                    </div>
+                </div>
+                
+                <div class="section-title">選擇時間</div>
+                <div class="time-buttons">
+                    <button class="time-btn" data-time="5">5 分鐘</button>
+                    <button class="time-btn" data-time="10">10 分鐘</button>
+                    <button class="time-btn selected" data-time="15">15 分鐘</button>
+                    <button class="time-btn" data-time="20">20 分鐘</button>
+                    <button class="time-btn" data-time="25">25 分鐘</button>
+                    <button class="time-btn" data-time="30">30 分鐘</button>
+                </div>
+                
+                <div class="action-btn">
+                    <button id="startSettingsBtn" class="primary-btn">開始跑步</button>
+                </div>
+                
+                <div class="hint">
+                    <p>提示：超慢跑適合使用較高步頻但較短步幅的跑步方式，180-200 BPM的步頻可有效減少關節衝擊力，提高跑步效率。</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 第二個畫面：跑步計時器 -->
+        <div id="runningScreen" class="screen">
+            <header>
+                <button id="backBtn" class="back-btn">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+                <h1>超慢跑進行中</h1>
+            </header>
+            
+            <div class="content">
+                <div class="display">
+                    <div class="time-display" id="timeDisplay">00:00</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <div class="stats">
+                        <div class="stat-box">
+                            <div class="stat-value" id="distanceDisplay">0.00</div>
+                            <div class="stat-label">距離 (公里)</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-value" id="bpmDisplay">180</div>
+                            <div class="stat-label">步頻 (BPM)</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-value">12</div>
+                            <div class="stat-label">配速 (分/公里)</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="running-indicator">
+                    <div class="pulse"></div>
+                    <span id="statusText">跟隨節拍聲音，保持步頻</span>
+                </div>
+                
+                <div class="buttons">
+                    <button id="toggleBtn" class="primary-btn">暫停</button>
+                    <button id="resetBtn" class="secondary-btn" disabled>重置</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM 元素 - 設定畫面
+        const settingsScreen = document.getElementById('settingsScreen');
+        const runningScreen = document.getElementById('runningScreen');
+        const bpmOptions = document.querySelectorAll('.bpm-option');
+        const timeButtons = document.querySelectorAll('.time-btn');
+        const startSettingsBtn = document.getElementById('startSettingsBtn');
+        const backBtn = document.getElementById('backBtn');
+        
+        // DOM 元素 - 跑步畫面
+        const timeDisplay = document.getElementById('timeDisplay');
+        const distanceDisplay = document.getElementById('distanceDisplay');
+        const bpmDisplay = document.getElementById('bpmDisplay');
+        const toggleBtn = document.getElementById('toggleBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const progressFill = document.getElementById('progressFill');
+        const statusText = document.getElementById('statusText');
+        const runningIndicator = document.querySelector('.running-indicator');
+        
+        // 變數
+        let selectedBpm = 180; // 預設 BPM
+        let selectedTime = 15; // 預設 15 分鐘
+        const pace = 12; // 固定配速 12 分鐘/公里
+        let isRunning = false;
+        let remainingTime = selectedTime * 60;
+        let totalTime = selectedTime * 60;
+        let distance = 0;
+        let timerInterval = null;
+        let metronomeInterval = null;
+        
+        // Web Audio API 設置
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // 步頻選項點擊事件
+        bpmOptions.forEach(option => {
+            option.addEventListener('click', () => {
+                // 移除所有選項的選中狀態
+                bpmOptions.forEach(opt => opt.classList.remove('selected'));
+                
+                // 添加當前選項的選中狀態
+                option.classList.add('selected');
+                
+                // 更新選中的 BPM
+                selectedBpm = parseInt(option.getAttribute('data-bpm'));
+            });
+        });
+        
+        // 時間按鈕點擊事件
+        timeButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                // 移除所有按鈕的選中狀態
+                timeButtons.forEach(btn => btn.classList.remove('selected'));
+                
+                // 添加當前按鈕的選中狀態
+                button.classList.add('selected');
+                
+                // 更新選中的時間
+                selectedTime = parseInt(button.getAttribute('data-time'));
+            });
+        });
+        
+        // 開始跑步按鈕事件
+        startSettingsBtn.addEventListener('click', () => {
+            // 更新跑步畫面的顯示
+            remainingTime = selectedTime * 60;
+            totalTime = selectedTime * 60;
+            bpmDisplay.textContent = selectedBpm;
+            updateDisplay();
+            
+            // 切換到跑步畫面
+            settingsScreen.classList.remove('active');
+            runningScreen.classList.add('active');
+            
+            // 自動開始跑步
+            startRunning();
+        });
+        
+        // 返回設定按鈕事件
+        backBtn.addEventListener('click', () => {
+            // 停止所有計時器
+            stopRunning();
+            
+            // 切換回設定畫面
+            runningScreen.classList.remove('active');
+            settingsScreen.classList.add('active');
+        });
+        
+        // 切換跑步狀態按鈕事件
+        toggleBtn.addEventListener('click', () => {
+            if (isRunning) {
+                pauseRunning();
+            } else {
+                startRunning();
+            }
+        });
+        
+        // 重置按鈕事件
+        resetBtn.addEventListener('click', () => {
+            resetRunning();
+        });
+        
+        // 開始倒數計時然後開始跑步
+        function startRunning() {
+            if (isRunning) return;
+            
+            // 確保瀏覽器允許音頻播放
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+            
+            // 倒數5秒
+            let countdown = 5;
+            toggleBtn.disabled = true;
+            resetBtn.disabled = true;
+            statusText.textContent = `準備開始...${countdown}`;
+            timeDisplay.textContent = countdown.toString();
+            timeDisplay.style.fontSize = '72px';
+            timeDisplay.classList.add('countdown-active');
+            
+            // 顯示倒數動畫
+            const countdownInterval = setInterval(() => {
+                countdown--;
+                if (countdown > 0) {
+                    timeDisplay.textContent = countdown.toString();
+                    statusText.textContent = `準備開始...${countdown}`;
+                    // 播放輕微的嗶聲
+                    createCountdownSound();
+                } else {
+                    // 倒數結束，開始跑步
+                    clearInterval(countdownInterval);
+                    timeDisplay.style.fontSize = '56px';
+                    timeDisplay.classList.remove('countdown-active');
+                    
+                    // 開始實際的跑步程序
+                    startActualRunning();
+                    
+                    // 播放開始的提示音
+                    createStartSound();
+                }
+            }, 1000);
+        }
+        
+        // 實際開始跑步的函數
+        function startActualRunning() {
+            isRunning = true;
+            toggleBtn.textContent = '暫停';
+            toggleBtn.disabled = false;
+            toggleBtn.classList.add('paused');
+            resetBtn.disabled = true;
+            runningIndicator.classList.add('running');
+            statusText.textContent = '跟隨節拍聲音，保持步頻';
+            
+            // 如果已結束，重置計時器
+            if (remainingTime <= 0) {
+                remainingTime = selectedTime * 60;
+                totalTime = selectedTime * 60;
+                distance = 0;
+                updateDisplay();
+            }
+            
+            // 啟動時間計時器
+            timerInterval = setInterval(() => {
+                remainingTime--;
+                
+                // 更新距離
+                const minutesPassed = (totalTime - remainingTime) / 60;
+                distance = minutesPassed / pace;
+                
+                // 更新進度條
+                const progress = 100 - (remainingTime / totalTime * 100);
+                progressFill.style.width = `${progress}%`;
+                
+                updateDisplay();
+                
+                if (remainingTime <= 0) {
+                    stopRunning();
+                    toggleBtn.textContent = '重新開始';
+                    toggleBtn.classList.remove('paused');
+                    resetBtn.disabled = false;
+                    statusText.textContent = '跑步完成！';
+                    runningIndicator.classList.remove('running');
+                }
+            }, 1000);
+            
+            // 啟動節拍器
+            const intervalTime = (60 / selectedBpm) * 1000; // 轉換BPM到毫秒
+            metronomeInterval = setInterval(() => {
+                createMetronomeSound();
+            }, intervalTime);
+            
+            // 立即播放第一次節拍聲
+            createMetronomeSound();
+        }
+        
+        // 暫停跑步
+        function pauseRunning() {
+            if (!isRunning) return;
+            
+            isRunning = false;
+            clearInterval(timerInterval);
+            clearInterval(metronomeInterval);
+            
+            toggleBtn.textContent = '繼續';
+            toggleBtn.classList.remove('paused');
+            resetBtn.disabled = false;
+            runningIndicator.classList.remove('running');
+            statusText.textContent = '暫停中';
+        }
+        
+        // 停止所有跑步相關計時器
+        function stopRunning() {
+            isRunning = false;
+            clearInterval(timerInterval);
+            clearInterval(metronomeInterval);
+        }
+        
+        // 重置跑步
+        function resetRunning() {
+            stopRunning();
+            remainingTime = selectedTime * 60;
+            totalTime = selectedTime * 60;
+            distance = 0;
+            progressFill.style.width = '100%';
+            updateDisplay();
+            
+            toggleBtn.textContent = '開始';
+            toggleBtn.classList.remove('paused');
+            statusText.textContent = '準備開始';
+        }
+        
+        // 創建節拍器聲音
+        function createMetronomeSound() {
+            // 創建振蕩器和音量節點
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            // 設置更悅耳的聲音
+            oscillator.type = 'sine';
+            oscillator.frequency.value = 800; // 頻率
+            
+            // 音量控制
+            gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0.5, audioContext.currentTime + 0.01);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.1);
+            
+            // 連接音頻節點
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            // 播放聲音
+            oscillator.start();
+            
+            // 在短時間後停止聲音
+            setTimeout(() => {
+                oscillator.stop();
+            }, 100);
+        }
+        
+        // 創建倒數計時的嗶聲 (頻率較低)
+        function createCountdownSound() {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.type = 'sine';
+            oscillator.frequency.value = 600; // 較低的頻率
+            
+            gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.01);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.1);
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.start();
+            
+            setTimeout(() => {
+                oscillator.stop();
+            }, 80);
+        }
+        
+        // 創建開始跑步的提示音 (更明顯的聲音)
+        function createStartSound() {
+            // 先播放一個較高的音
+            const oscillator1 = audioContext.createOscillator();
+            const gainNode1 = audioContext.createGain();
+            
+            oscillator1.type = 'sine';
+            oscillator1.frequency.value = 880;
+            
+            gainNode1.gain.setValueAtTime(0, audioContext.currentTime);
+            gainNode1.gain.linearRampToValueAtTime(0.6, audioContext.currentTime + 0.01);
+            gainNode1.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.2);
+            
+            oscillator1.connect(gainNode1);
+            gainNode1.connect(audioContext.destination);
+            
+            oscillator1.start();
+            
+            setTimeout(() => {
+                oscillator1.stop();
+                
+                // 然後播放第二個音
+                const oscillator2 = audioContext.createOscillator();
+                const gainNode2 = audioContext.createGain();
+                
+                oscillator2.type = 'sine';
+                oscillator2.frequency.value = 1200;
+                
+                gainNode2.gain.setValueAtTime(0, audioContext.currentTime);
+                gainNode2.gain.linearRampToValueAtTime(0.7, audioContext.currentTime + 0.01);
+                gainNode2.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.3);
+                
+                oscillator2.connect(gainNode2);
+                gainNode2.connect(audioContext.destination);
+                
+                oscillator2.start();
+                
+                setTimeout(() => {
+                    oscillator2.stop();
+                }, 300);
+            }, 150);
+        }
+        
+        // 格式化時間顯示
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+        
+        // 更新顯示
+        function updateDisplay() {
+            timeDisplay.textContent = formatTime(remainingTime);
+            distanceDisplay.textContent = distance.toFixed(2);
+        }
+        
+        // 初始化顯示
+        updateDisplay();
+        
+        // 為了在移動設備上更好的性能，防止滾動刷新頁面
+        document.body.addEventListener('touchmove', function(e) {
+            e.preventDefault();
+        }, { passive: false });
+    </script>
+</body>
+</html>
