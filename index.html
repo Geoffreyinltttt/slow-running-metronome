@@ -549,6 +549,8 @@
         let distance = 0;
         let timerInterval = null;
         let metronomeInterval = null;
+        let wakeLock = null; // 螢幕喚醒鎖
+        let pauseTime = null; // 跟踪頁面隱藏時間點
         
         // Web Audio API 設置
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -664,13 +666,16 @@
         
         // 實際開始跑步的函數
         function startActualRunning() {
-            isRunning = true;
-            toggleBtn.textContent = '暫停';
-            toggleBtn.disabled = false;
-            toggleBtn.classList.add('paused');
-            resetBtn.disabled = true;
-            runningIndicator.classList.add('running');
-            statusText.textContent = '跟隨節拍聲音，保持步頻';
+    isRunning = true;
+    toggleBtn.textContent = '暫停';
+    toggleBtn.disabled = false;
+    toggleBtn.classList.add('paused');
+    resetBtn.disabled = true;
+    runningIndicator.classList.add('running');
+    statusText.textContent = '跟隨節拍聲音，保持步頻';
+    
+    // 請求保持螢幕喚醒
+    requestWakeLock();
             
             // 如果已結束，重置計時器
             if (remainingTime <= 0) {
@@ -731,10 +736,13 @@
         
         // 停止所有跑步相關計時器
         function stopRunning() {
-            isRunning = false;
-            clearInterval(timerInterval);
-            clearInterval(metronomeInterval);
-        }
+    isRunning = false;
+    clearInterval(timerInterval);
+    clearInterval(metronomeInterval);
+    
+    // 釋放螢幕喚醒鎖定
+    releaseWakeLock();
+}
         
         // 重置跑步
         function resetRunning() {
@@ -752,31 +760,37 @@
         
         // 創建節拍器聲音
         function createMetronomeSound() {
-            // 創建振蕩器和音量節點
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
-            
-            // 設置更悅耳的聲音
-            oscillator.type = 'sine';
-            oscillator.frequency.value = 800; // 頻率
-            
-            // 音量控制
-            gainNode.gain.setValueAtTime(0, audioContext.currentTime);
-            gainNode.gain.linearRampToValueAtTime(0.5, audioContext.currentTime + 0.01);
-            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.1);
-            
-            // 連接音頻節點
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-            
-            // 播放聲音
-            oscillator.start();
-            
-            // 在短時間後停止聲音
-            setTimeout(() => {
-                oscillator.stop();
-            }, 100);
+    try {
+        // 檢查音頻上下文狀態
+        if (audioContext.state === 'suspended') {
+            audioContext.resume();
         }
+        
+        // 創建振蕩器和音量節點
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        // 設置更悅耳的聲音
+        oscillator.type = 'sine';
+        oscillator.frequency.value = 800; // 頻率
+        
+        // 音量控制 - 使用現在時間而非絕對時間
+        const now = audioContext.currentTime;
+        gainNode.gain.setValueAtTime(0, now);
+        gainNode.gain.linearRampToValueAtTime(0.5, now + 0.01);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+        
+        // 連接音頻節點
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        // 播放聲音
+        oscillator.start();
+        oscillator.stop(now + 0.1); // 直接指定停止時間更可靠
+    } catch (err) {
+        console.error('音頻播放錯誤:', err);
+    }
+}
         
         // 創建倒數計時的嗶聲 (頻率較低)
         function createCountdownSound() {
@@ -849,6 +863,28 @@
             const secs = seconds % 60;
             return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
         }
+
+        async function requestWakeLock() {
+    try {
+        if ('wakeLock' in navigator) {
+            wakeLock = await navigator.wakeLock.request('screen');
+            console.log('螢幕喚醒鎖定已獲取');
+        }
+    } catch (err) {
+        console.error(`無法獲取螢幕喚醒鎖定: ${err.name}, ${err.message}`);
+    }
+}
+
+// 釋放螢幕喚醒鎖定
+function releaseWakeLock() {
+    if (wakeLock !== null) {
+        wakeLock.release()
+            .then(() => {
+                wakeLock = null;
+                console.log('螢幕喚醒鎖定已釋放');
+            });
+    }
+}
         
         // 更新顯示
         function updateDisplay() {
@@ -863,6 +899,45 @@
         document.body.addEventListener('touchmove', function(e) {
             e.preventDefault();
         }, { passive: false });
+
+        document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+        // 頁面隱藏時記錄時間點
+        if (isRunning) {
+            pauseTime = Date.now();
+        }
+        // 釋放鎖，因為切到背景時系統會強制釋放
+        if (wakeLock !== null) {
+            wakeLock.release().then(() => {
+                wakeLock = null;
+            });
+        }
+    } else if (document.visibilityState === 'visible') {
+        // 頁面再次可見時
+        if (isRunning) {
+            // 如果跑步仍在進行中，重新請求鎖
+            requestWakeLock();
+            
+            // 調整計時器以反映經過的時間
+            if (pauseTime !== null) {
+                const elapsedSeconds = Math.floor((Date.now() - pauseTime) / 1000);
+                remainingTime = Math.max(0, remainingTime - elapsedSeconds);
+                updateDisplay();
+                pauseTime = null;
+                
+                // 如果時間結束，觸發停止邏輯
+                if (remainingTime <= 0) {
+                    stopRunning();
+                    toggleBtn.textContent = '重新開始';
+                    toggleBtn.classList.remove('paused');
+                    resetBtn.disabled = false;
+                    statusText.textContent = '跑步完成！';
+                    runningIndicator.classList.remove('running');
+                }
+            }
+        }
+    }
+});
     </script>
 </body>
 </html>
